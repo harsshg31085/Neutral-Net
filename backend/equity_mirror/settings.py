@@ -40,7 +40,7 @@ ROOT_URLCONF = 'equity_mirror.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'frontend')],
+        'DIRS': [BASE_DIR/"frontend"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -67,8 +67,8 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'frontend')]
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [BASE_DIR/"frontend"/"static", ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
