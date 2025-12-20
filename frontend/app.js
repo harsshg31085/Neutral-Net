@@ -237,7 +237,7 @@ class EquityMirror {
         
         try {
             // REVERTED: Use the original endpoint
-            const response = await fetch('/api/real-time-analyze/', {
+            const response = await fetch('http://localhost:8000/api/real-time-analyze/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
