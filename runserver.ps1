@@ -14,7 +14,7 @@ $null = Register-EngineEvent PowerShell.Exiting -Action { Cleanup }
 # Start frontend
 Write-Host "Starting frontend on http://localhost:3000..."
 Push-Location frontend
-$frontendProcess = Start-Process -FilePath "npx" -ArgumentList "http-server -p 3000" -PassThru
+$frontendProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npx http-server -p 3000" -PassThru
 Pop-Location
 
 # Wait until frontend is ready
