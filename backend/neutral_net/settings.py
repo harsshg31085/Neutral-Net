@@ -35,7 +35,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'equity_mirror.urls'
+ROOT_URLCONF = 'neutral_net.urls'
 
 TEMPLATES = [
     {
@@ -53,7 +53,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'equity_mirror.wsgi.application'
+WSGI_APPLICATION = 'neutral_net.wsgi.application'
 
 DATABASES = {
     'default': {
