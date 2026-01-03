@@ -3,35 +3,56 @@ import uuid
 from typing import Dict, List, Any
 from .bias_patterns import BiasType, BiasPatterns
 from .text_processor import TextProcessor
+from .agentic_communal_detector import AgenticCommunalDetector
 
 class BiasDetector:
     def __init__(self):
         self.processor = TextProcessor()
+
+        self.compiled_pronouns = []
+        for pattern_str, info in BiasPatterns.PRONOUN_PATTERNS.items():
+            self.compiled_pronouns.append({
+                "regex": re.compile(pattern_str, re.IGNORECASE),
+                "info": info,
+                "pattern_str": pattern_str
+            })
+        
+        self.agentic_communal_ai = AgenticCommunalDetector()
     
     def analyze_text(self, text: str) -> Dict[str, Any]:
         text = text.strip()
-        
         if not text:
-            return {
-                "text": "",
-                "highlighted_text": "",
-                "biases": [],
-                "bias_count": 0,
-                "overall_score": 100,
-                "pronoun_stats": {},
-                "word_count": 0,
-                "sentence_count": 0
-            }
+            return self._get_empty_result()
         
         biases = []
+        
         biases.extend(self._detect_pronoun_biases(text))
-        biases.extend(self._detect_agentic_communal_biases(text))
         biases.extend(self._detect_stereotype_biases(text))
         biases.extend(self._detect_semantic_biases(text))
         
+        sentences = self.processor.extract_sentences(text)
+        current_pos = 0
+        
+        for sentence in sentences:
+            start_index = text.find(sentence, current_pos)
+            if start_index == -1: continue
+            
+            ai_result = self.agentic_communal_ai.analyze_sentence(sentence)
+            
+            if ai_result:
+                local_start = ai_result['position']['start']
+                local_end = ai_result['position']['end']
+                
+                ai_result['id'] = str(uuid.uuid4())
+                ai_result['position']['start'] = start_index + local_start
+                ai_result['position']['end'] = start_index + local_end
+                
+                biases.append(ai_result)
+            
+            current_pos = start_index + len(sentence)
+
         pronoun_stats = self.processor.calculate_pronoun_stats(text)
         overall_score = self._calculate_overall_score(biases, pronoun_stats)
-        
         highlighted_text = self.processor.highlight_text_with_biases(text, biases)
         
         return {
@@ -42,14 +63,17 @@ class BiasDetector:
             "overall_score": overall_score,
             "pronoun_stats": pronoun_stats,
             "word_count": len(text.split()),
-            "sentence_count": len(self.processor.extract_sentences(text))
+            "sentence_count": len(sentences)
         }
     
     def _detect_pronoun_biases(self, text: str) -> List[Dict]:
         biases = []
                 
-        for pattern_str, pattern_info in BiasPatterns.PRONOUN_PATTERNS.items():
-            for match in re.finditer(pattern_str, text, re.IGNORECASE):
+        for item in self.compiled_pronouns:
+            pattern = item["regex"]
+            pattern_info = item["info"]
+            
+            for match in pattern.finditer(text):
                 start, end = match.start(), match.end()
                 biased_text = text[start:end]
                 
@@ -90,45 +114,6 @@ class BiasDetector:
                     return True
         
         return False
-    
-    def _detect_agentic_communal_biases(self, text: str) -> List[Dict]:
-        biases = []
-        text_lower = text.lower()
-        words = text_lower.split()
-        
-        for term, info in BiasPatterns.AGENTIC_TERMS.items():
-            if term in words:
-                positions = self.processor.find_word_positions(text, term)
-                for start, end in positions:
-                    biased_text = text[start:end]
-                    biases.append({
-                        "id": str(uuid.uuid4()),
-                        "type": BiasType.AGENTIC_COMMUNAL,
-                        "target_text": biased_text,
-                        "position": {"start": start, "end": end},
-                        "description": f"Agentic term: '{biased_text}' - often associated with male stereotypes",
-                        "suggestion": info["suggestion"],
-                        "alternatives": [],
-                        "severity": "low"
-                    })
-        
-        for term, info in BiasPatterns.COMMUNAL_TERMS.items():
-            if term in words:
-                positions = self.processor.find_word_positions(text, term)
-                for start, end in positions:
-                    biased_text = text[start:end]
-                    biases.append({
-                        "id": str(uuid.uuid4()),
-                        "type": BiasType.AGENTIC_COMMUNAL,
-                        "target_text": biased_text,
-                        "position": {"start": start, "end": end},
-                        "description": f"Communal term: '{biased_text}' - often associated with female stereotypes",
-                        "suggestion": info["suggestion"],
-                        "alternatives": [],
-                        "severity": "low"
-                    })
-        
-        return biases
     
     def _detect_stereotype_biases(self, text: str) -> List[Dict]:
         biases = []
@@ -196,3 +181,10 @@ class BiasDetector:
         base_score = (base_score + pronoun_balance) / 2
         
         return max(0, min(100, int(base_score)))
+    
+    def _get_empty_result(self):
+        return {
+            "text": "", "highlighted_text": "", "biases": [], 
+            "bias_count": 0, "overall_score": 100, 
+            "pronoun_stats": {}, "word_count": 0, "sentence_count": 0
+        }

@@ -28,6 +28,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -40,7 +41,7 @@ ROOT_URLCONF = 'neutral_net.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR/"frontend"],
+        'DIRS': [BASE_DIR.parent/"frontend"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -68,7 +69,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-# STATICFILES_DIRS = [BASE_DIR/"frontend"/"static", ]
+STATICFILES_DIRS = [BASE_DIR.parent/"frontend",]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -84,3 +85,5 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ]
 }
+
+CORS_ALLOW_ALL_ORIGINS = True

@@ -179,7 +179,7 @@ class NeutralNet {
         
         this.debounceTimer = setTimeout(() => {
             this.analyzeText(plainText);
-        }, 1000);
+        }, 500);
     }
     
     getPlainTextFromEditable() {
