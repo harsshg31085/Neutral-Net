@@ -3,8 +3,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.apps import apps
 import json
-from .utils.bias_detector import BiasDetector
 
 def home_view(request):
     return render(request, 'index.html')
@@ -26,7 +26,13 @@ class RealTimeAnalyzeView(View):
                     'word_count': 0
                 })
             
-            detector = BiasDetector()
+            api_config = apps.get_app_config('api')
+            detector = api_config.detector
+            
+            if detector is None:
+                from .utils.bias_detector import BiasDetector
+                detector = BiasDetector()
+
             analysis = detector.analyze_text(text)
             
             return JsonResponse({
