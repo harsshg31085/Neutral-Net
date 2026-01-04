@@ -41,7 +41,8 @@ class RealTimeAnalyzeView(View):
                 'biases': analysis['biases'],
                 'score': analysis['overall_score'],
                 'pronoun_stats': analysis['pronoun_stats'],
-                'word_count': analysis['word_count']
+                'word_count': analysis['word_count'],
+                'bias_data': analysis['bias_data']
             })
             
         except Exception as e:

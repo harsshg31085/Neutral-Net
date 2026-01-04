@@ -79,3 +79,26 @@ class TextProcessor:
             highlighted_text = highlighted_text[:start] + span + highlighted_text[end:]
         
         return highlighted_text
+
+    @staticmethod
+    def frontend_data(text: str, biases: List[Dict]) -> List[Dict]:
+        data = []
+        biases.sort(key = lambda x: x['position']['start'])
+
+        for bias in biases:
+
+            color = BiasPatterns.BIAS_COLORS[bias['type']]
+
+            data.append({
+                'id': bias['id'],
+                'text': bias['target_text'],
+                'start': bias['position']['start'],
+                'end': bias['position']['end'],
+                'description': bias['description'],
+                'suggestion': bias['suggestion'],
+                'alternatives': bias['alternatives'],
+                'severity': bias['severity'],
+                'color': color
+            })
+        
+        return data

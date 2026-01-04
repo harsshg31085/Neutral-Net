@@ -54,6 +54,7 @@ class BiasDetector:
         pronoun_stats = self.processor.calculate_pronoun_stats(text)
         overall_score = self._calculate_overall_score(biases, pronoun_stats)
         highlighted_text = self.processor.highlight_text_with_biases(text, biases)
+        bias_data = self.processor.frontend_data(text, biases)
         
         return {
             "text": text,
@@ -63,7 +64,8 @@ class BiasDetector:
             "overall_score": overall_score,
             "pronoun_stats": pronoun_stats,
             "word_count": len(text.split()),
-            "sentence_count": len(sentences)
+            "sentence_count": len(sentences),
+            "bias_data": bias_data
         }
     
     def _detect_pronoun_biases(self, text: str) -> List[Dict]:
