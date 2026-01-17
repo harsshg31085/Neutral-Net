@@ -4,6 +4,7 @@ from typing import Dict, List, Any
 from .bias_patterns import BiasType, BiasPatterns
 from .text_processor import TextProcessor
 from .agentic_communal_detector import AgenticCommunalDetector
+from .gendered_terms_detector import GenderedTermsDetector
 
 class BiasDetector:
     def __init__(self):
@@ -18,6 +19,7 @@ class BiasDetector:
             })
         
         self.agentic_communal_ai = AgenticCommunalDetector()
+        self.gendered_terms_detector = GenderedTermsDetector()
     
     def analyze_text(self, text: str) -> Dict[str, Any]:
         text = text.strip()
@@ -27,7 +29,6 @@ class BiasDetector:
         biases = []
         
         biases.extend(self._detect_pronoun_biases(text))
-        biases.extend(self._detect_stereotype_biases(text))
         biases.extend(self._detect_semantic_biases(text))
         
         sentences = self.processor.extract_sentences(text)
@@ -50,6 +51,12 @@ class BiasDetector:
                 biases.append(ai_result)
             
             current_pos = start_index + len(sentence)
+        
+        try:
+            gendered_biases = self.gendered_terms_detector.analyze(text)
+            biases.extend(gendered_biases)
+        except Exception as e:
+            print(f"Error in gendered detection: {e}")
 
         pronoun_stats = self.processor.calculate_pronoun_stats(text)
         overall_score = self._calculate_overall_score(biases, pronoun_stats)
@@ -115,28 +122,6 @@ class BiasDetector:
         
         return False
     
-    def _detect_stereotype_biases(self, text: str) -> List[Dict]:
-        biases = []
-        
-        for pattern, gender, suggestion in BiasPatterns.STEREOTYPE_PATTERNS:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                start, end = match.start(), match.end()
-                biased_text = text[start:end]
-                
-                biases.append({
-                    "id": str(uuid.uuid4()),
-                    "type": BiasType.STEREOTYPE,
-                    "target_text": biased_text,
-                    "position": {"start": start, "end": end},
-                    "description": f"Gender-stereotyped term: '{biased_text}' - often associated with {gender}",
-                    "suggestion": suggestion,
-                    "alternatives": [],
-                    "severity": "high",
-                    "color": BiasPatterns.get_bias_color(BiasType.STEREOTYPE)
-                })
-        
-        return biases
-    
     def _detect_semantic_biases(self, text: str) -> List[Dict]:
         biases = []
         sentences = self.processor.extract_sentences(text)
@@ -170,9 +155,10 @@ class BiasDetector:
         base_score = 100
         
         for bias in biases:
-            if bias["severity"] == "high":
+            severity = bias.get("severity", "low")
+            if severity == "high":
                 base_score -= 10
-            elif bias["severity"] == "medium":
+            elif severity == "medium":
                 base_score -= 5
             else:  
                 base_score -= 2

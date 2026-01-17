@@ -4,7 +4,17 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.apps import apps
+from django.core.serializers.json import DjangoJSONEncoder
+from django.http import HttpResponse
 import json
+
+class NumpyEncoder(DjangoJSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, 'item'):
+            return obj.item()
+        if hasattr(obj, 'tolist'):
+            return obj.tolist()
+        return super().default(obj)
 
 def home_view(request):
     return render(request, 'index.html')
@@ -35,16 +45,24 @@ class RealTimeAnalyzeView(View):
 
             analysis = detector.analyze_text(text)
             
-            return JsonResponse({
+            response_data = {
                 'text': text,
                 'highlighted_html': analysis['highlighted_text'],
                 'biases': analysis['biases'],
                 'score': analysis['overall_score'],
                 'pronoun_stats': analysis['pronoun_stats'],
                 'word_count': analysis['word_count']
-            })
+            }
+
+            return HttpResponse(
+                json.dumps(response_data, cls=NumpyEncoder), 
+                content_type="application/json"
+            )
             
         except Exception as e:
+            import traceback
+            print("SERVER ERROR DETAILS:")
+            print(traceback.format_exc())
             return JsonResponse({
                 'error': str(e),
                 'text': '',
