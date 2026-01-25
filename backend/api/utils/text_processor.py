@@ -56,26 +56,40 @@ class TextProcessor:
     
     @staticmethod
     def highlight_text_with_biases(text: str, biases: List[Dict]) -> str:
-        biases.sort(key=lambda x: x['position']['start'], reverse=True)
+        biases.sort(key=lambda x: x['position']['start'])
         
-        highlighted_text = text
+        output = []
+        last_idx = 0
         
         for bias in biases:
             start = bias['position']['start']
             end = bias['position']['end']
+            
+            start = max(0, start)
+            end = min(len(text), end)
+
+            if start < last_idx:
+                continue
+            
+            output.append(text[last_idx:start])
+            
             color = BiasPatterns.get_bias_color(bias['type'])
             bias_id = bias.get('id', str(uuid.uuid4()))
-            
             biased_text = text[start:end]
             
             biased_text_escaped = biased_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             
-            span = f'<span class="bias-highlight" ' \
-                f'data-bias-id="{bias_id}" ' \
-                f'style="background-color: {color}; cursor: pointer; padding: 1px 0; border-radius: 3px; display: inline;">' \
-                f'{biased_text_escaped}' \
+            span = (
+                f'<span class="bias-highlight" '
+                f'data-bias-id="{bias_id}" '
+                f'style="background-color: {color}; cursor: pointer; padding: 1px 0; border-radius: 3px; display: inline;">'
+                f'{biased_text_escaped}'
                 f'</span>'
+            )
+            output.append(span)
             
-            highlighted_text = highlighted_text[:start] + span + highlighted_text[end:]
+            last_idx = end
+            
+        output.append(text[last_idx:])
         
-        return highlighted_text
+        return "".join(output)
