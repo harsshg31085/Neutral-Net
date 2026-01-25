@@ -6,7 +6,7 @@ AGENTIC_LIST = [
     "assertive", "autonomous", "bold", "bossy",
     "calculating", "challenging", "commanding", "competitive",
     "confident", "confrontational", "controlling", "courageous",
-    "daring", "decisive", "demanding", "determined",
+    "daring", "demanding", "determined",
     "dominant", "domineering", "driven", "enterprising",
     "fearless", "forceful", "goal-oriented", "hard-headed",
     "independent", "individualistic", "industrious",

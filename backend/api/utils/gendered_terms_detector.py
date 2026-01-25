@@ -7,13 +7,11 @@ warnings.filterwarnings("ignore")
 
 class GenderedTermsDetector:
     def __init__(self):
-        print("Loading Gendered Terms NLI Model... (this may take a moment)")
         self.nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
         
         try:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
-            print("Downloading spacy model 'en_core_web_sm'...")
             from spacy.cli import download
             download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")

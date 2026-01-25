@@ -5,6 +5,7 @@ from .bias_patterns import BiasType, BiasPatterns
 from .text_processor import TextProcessor
 from .agentic_communal_detector import AgenticCommunalDetector
 from .gendered_terms_detector import GenderedTermsDetector
+from .stereotype_detector import StereotypeDetector
 
 class BiasDetector:
     def __init__(self):
@@ -18,18 +19,28 @@ class BiasDetector:
                 "pattern_str": pattern_str
             })
         
-        self.agentic_communal_ai = AgenticCommunalDetector()
+        self.agentic_communal_detector = AgenticCommunalDetector()
         self.gendered_terms_detector = GenderedTermsDetector()
+        self.stereotype_detector = StereotypeDetector()
+
+        self.empty_result = {
+            "text": "",
+            "highlighted_text": "",
+            "biases": [], 
+            "bias_count": 0,
+            "overall_score": 100, 
+            "pronoun_stats": {},
+            "word_count": 0,
+            "sentence_count": 0
+        }
     
     def analyze_text(self, text: str) -> Dict[str, Any]:
         text = text.strip()
         if not text:
-            return self._get_empty_result()
+            return self.empty_result
         
         biases = []
-        
-        biases.extend(self._detect_pronoun_biases(text))
-        biases.extend(self._detect_semantic_biases(text))
+        blocked_ranges = []
         
         sentences = self.processor.extract_sentences(text)
         current_pos = 0
@@ -38,28 +49,65 @@ class BiasDetector:
             start_index = text.find(sentence, current_pos)
             if start_index == -1: continue
             
-            ai_result = self.agentic_communal_ai.analyze_sentence(sentence)
+            sent_end = start_index + len(sentence)
             
-            if ai_result:
-                local_start = ai_result['position']['start']
-                local_end = ai_result['position']['end']
-                
-                ai_result['id'] = str(uuid.uuid4())
-                ai_result['position']['start'] = start_index + local_start
-                ai_result['position']['end'] = start_index + local_end
-                
-                biases.append(ai_result)
+            try:
+                stereotype_result = self.stereotype_detector.analyze_sentence(sentence)
+                if stereotype_result:
+                    stereotype_result['position']['start'] += start_index
+                    stereotype_result['position']['end'] += start_index
+                    
+                    biases.append(stereotype_result)
+                    blocked_ranges.append((start_index, sent_end))
+                    
+                    current_pos = sent_end
+                    continue 
+            except Exception as e:
+                print(f"Error in stereotype detection: {e}")
+
+            agentic_communal_results = self.agentic_communal_detector.analyze_sentence(sentence)
             
-            current_pos = start_index + len(sentence)
+            for result in agentic_communal_results:
+                start = result['position']['start']
+                end = result['position']['end']
+
+                result['id'] = str(uuid.uuid4())
+                result['position']['start'] = start_index + start
+                result['position']['end'] = start_index + end
+
+                biases.append(result)
+            
+            current_pos = sent_end
+
+        def is_safe(b_start, b_end):
+            for block_start, block_end in blocked_ranges:
+                if not (b_end <= block_start or b_start >= block_end):
+                    return False
+            return True
+
+        raw_pronouns = self._detect_pronoun_biases(text)
+        for b in raw_pronouns:
+            if is_safe(b['position']['start'], b['position']['end']):
+                biases.append(b)
+
+        raw_semantic = self._detect_semantic_biases(text)
+        for b in raw_semantic:
+            if is_safe(b['position']['start'], b['position']['end']):
+                biases.append(b)
         
         try:
             gendered_biases = self.gendered_terms_detector.analyze(text)
-            biases.extend(gendered_biases)
+            for b in gendered_biases:
+                if is_safe(b['position']['start'], b['position']['end']):
+                    biases.append(b)
         except Exception as e:
             print(f"Error in gendered detection: {e}")
 
         pronoun_stats = self.processor.calculate_pronoun_stats(text)
-        overall_score = self._calculate_overall_score(biases, pronoun_stats)
+
+        word_count = len(text.split())
+        overall_score = self._calculate_overall_score(biases, word_count, pronoun_stats)
+
         highlighted_text = self.processor.highlight_text_with_biases(text, biases)
         
         return {
@@ -69,7 +117,7 @@ class BiasDetector:
             "bias_count": len(biases),
             "overall_score": overall_score,
             "pronoun_stats": pronoun_stats,
-            "word_count": len(text.split()),
+            "word_count": word_count,
             "sentence_count": len(sentences)
         }
     
@@ -151,26 +199,28 @@ class BiasDetector:
         
         return biases
     
-    def _calculate_overall_score(self, biases: List[Dict], pronoun_stats: Dict) -> int:
-        base_score = 100
+    def _calculate_overall_score(self, biases: List[Dict], word_count: int, pronoun_stats: Dict) -> int:
+        effective_length = max(word_count, 60)
         
-        for bias in biases:
-            severity = bias.get("severity", "low")
-            if severity == "high":
-                base_score -= 10
-            elif severity == "medium":
-                base_score -= 5
-            else:  
-                base_score -= 2
-        
-        pronoun_balance = pronoun_stats.get("pronoun_balance", 100)
-        base_score = (base_score + pronoun_balance) / 2
-        
-        return max(0, min(100, int(base_score)))
-    
-    def _get_empty_result(self):
-        return {
-            "text": "", "highlighted_text": "", "biases": [], 
-            "bias_count": 0, "overall_score": 100, 
-            "pronoun_stats": {}, "word_count": 0, "sentence_count": 0
+        weights = {
+            'stereotype': 30,         
+            'gendered_terms': 10,     
+            'agentic_communal': 5,    
+            'pronoun': 5,
+            'semantic': 5
         }
+        
+        total_penalty_points = 0
+        for bias in biases:
+            b_type = bias.get('type', 'other')
+            total_penalty_points += weights.get(b_type, 5)
+
+        density_penalty = (total_penalty_points / effective_length) * 100
+        
+        bias_free_score = max(0, 100 - density_penalty)
+
+        pronoun_score = pronoun_stats.get("pronoun_balance", 100)
+
+        final_score = (bias_free_score * 0.8) + (pronoun_score * 0.2)
+        
+        return int(final_score)
