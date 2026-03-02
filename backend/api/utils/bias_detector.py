@@ -6,22 +6,16 @@ from .text_processor import TextProcessor
 from .agentic_communal_detector import AgenticCommunalDetector
 from .gendered_terms_detector import GenderedTermsDetector
 from .stereotype_detector import StereotypeDetector
+from .pronoun_detector import PronounBiasDetector
 
 class BiasDetector:
     def __init__(self):
         self.processor = TextProcessor()
-
-        self.compiled_pronouns = []
-        for pattern_str, info in BiasPatterns.PRONOUN_PATTERNS.items():
-            self.compiled_pronouns.append({
-                "regex": re.compile(pattern_str, re.IGNORECASE),
-                "info": info,
-                "pattern_str": pattern_str
-            })
         
         self.agentic_communal_detector = AgenticCommunalDetector()
         self.gendered_terms_detector = GenderedTermsDetector()
         self.stereotype_detector = StereotypeDetector()
+        self.pronoun_detector = PronounBiasDetector()
 
         self.empty_result = {
             "text": "",
@@ -85,15 +79,13 @@ class BiasDetector:
                     return False
             return True
 
-        raw_pronouns = self._detect_pronoun_biases(text)
-        for b in raw_pronouns:
-            if is_safe(b['position']['start'], b['position']['end']):
-                biases.append(b)
-
-        raw_semantic = self._detect_semantic_biases(text)
-        for b in raw_semantic:
-            if is_safe(b['position']['start'], b['position']['end']):
-                biases.append(b)
+        try:
+            raw_pronouns = self.pronoun_detector.analyze(text)
+            for b in raw_pronouns:
+                if is_safe(b['position']['start'], b['position']['end']):
+                    biases.append(b)
+        except Exception as e:
+            print(f"Error in pronoun coref detection: {e}")
         
         try:
             gendered_biases = self.gendered_terms_detector.analyze(text)
@@ -121,84 +113,6 @@ class BiasDetector:
             "sentence_count": len(sentences)
         }
     
-    def _detect_pronoun_biases(self, text: str) -> List[Dict]:
-        biases = []
-                
-        for item in self.compiled_pronouns:
-            pattern = item["regex"]
-            pattern_info = item["info"]
-            
-            for match in pattern.finditer(text):
-                start, end = match.start(), match.end()
-                biased_text = text[start:end]
-                
-                if self._is_false_positive(text, start, end, biased_text.lower()):
-                    continue
-                
-                biases.append({
-                    "id": str(uuid.uuid4()),
-                    "type": BiasType.PRONOUN,
-                    "target_text": biased_text,
-                    "position": {"start": start, "end": end},
-                    "description": f"Gender-specific pronoun detected: '{biased_text}'",
-                    "suggestion": pattern_info["suggestion"],
-                    "alternatives": pattern_info["alternatives"],
-                    "severity": "medium"
-                })
-        
-        return biases
-
-    def _is_false_positive(self, text: str, start: int, end: int, word: str) -> bool:        
-        false_positive_map = {
-            "he": ["the", "here", "there", "where", "hence"],
-            "her": ["there", "where", "here", "adhere", "cohere"],
-            "his": ["this", "history", "historian", "whisper"],
-            "him": ["whim", "shim", "brim", "trim"]
-        }
-        
-        if word not in false_positive_map:
-            return False
-        
-        context_start = max(0, start - 3)
-        context_end = min(len(text), end + 3)
-        context = text[context_start:context_end].lower()
-        
-        for false_word in false_positive_map[word]:
-            if false_word in context:
-                if false_word != word and word in false_word:
-                    return True
-        
-        return False
-    
-    def _detect_semantic_biases(self, text: str) -> List[Dict]:
-        biases = []
-        sentences = self.processor.extract_sentences(text)
-        
-        current_pos = 0
-        for sentence in sentences:
-            lower_sentence = sentence.lower()
-            
-            if ("only" in lower_sentence or "always" in lower_sentence) and \
-               ("he" in lower_sentence or "she" in lower_sentence):
-                
-                start = current_pos + text[current_pos:].find(sentence)
-                end = start + len(sentence)
-                
-                biases.append({
-                    "id": str(uuid.uuid4()),
-                    "type": BiasType.SEMANTIC,
-                    "target_text": sentence,
-                    "position": {"start": start, "end": end},
-                    "description": "Potential semantic bias: Sentence makes absolute gender associations",
-                    "suggestion": "Consider rephrasing to avoid absolute statements about gender",
-                    "alternatives": [],
-                    "severity": "medium"
-                })
-            
-            current_pos += len(sentence) + 1
-        
-        return biases
-    
     def _calculate_overall_score(self, biases: List[Dict], word_count: int, pronoun_stats: Dict) -> int:
         effective_length = max(word_count, 60)
         
@@ -206,8 +120,7 @@ class BiasDetector:
             'stereotype': 30,         
             'gendered_terms': 10,     
             'agentic_communal': 5,    
-            'pronoun': 5,
-            'semantic': 5
+            'pronoun': 5
         }
         
         total_penalty_points = 0
