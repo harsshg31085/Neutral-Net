@@ -15,6 +15,7 @@ class NeutralNet {
         this.loadInitialDemo();
         
         this.adjustEditorHeight();
+        this.initChart();
     }
     
     initializeElements() {
@@ -29,6 +30,8 @@ class NeutralNet {
         this.statusIndicator = document.getElementById('status-indicator');
         this.suggestionsContainer = document.getElementById('suggestions-container');
         this.editorPanel = document.querySelector('.editor-panel');
+        this.fileInput = document.getElementById('file-upload');
+        this.uploadBtn = document.getElementById('upload-btn');
         
         this.biasCounts = {
             'pronoun': document.getElementById('count-pronoun'),
@@ -54,6 +57,9 @@ class NeutralNet {
             this.isComposing = false;
             this.handleTextInput();
         });
+
+        this.uploadBtn.addEventListener('click', () => this.fileInput.click());
+        this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e))
         
         window.addEventListener('resize', () => this.adjustEditorHeight());
         
@@ -145,6 +151,37 @@ class NeutralNet {
             console.warn('Could not restore cursor position:', e);
             this.setCursorToEnd();
         }
+    }
+
+    initChart() {
+        const ctx = document.getElementById('biasChart').getContext('2d');
+        this.biasChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Agentic Tone', 'Communal Tone', 'Gendered Terms', 'Pronoun Skew', 'Stereotypes'],
+                datasets: [{
+                    label: 'Bias Intensity',
+                    data: [0, 0, 0, 0, 0],
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: 'rgba(79, 70, 229, 1)',
+                    pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+                    borderWidth: 2,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                        pointLabels: { font: { size: 11, family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" } },
+                        ticks: { display: false, min: 0, max: 10} 
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
     }
     
     handleTextInput(e) {
@@ -353,36 +390,21 @@ class NeutralNet {
     }
 
     fixAllBiases() {
-        // console.log("--- FIX ALL BUTTON CLICKED ---");
-        // console.log("1. Raw currentBiases array:", JSON.parse(JSON.stringify(this.currentBiases)));
-
         if (!this.currentBiases || this.currentBiases.length === 0) {
-            // console.warn("ABORT: currentBiases is empty or undefined.");
             return;
         }
         
         let currentText = this.getPlainTextFromEditable();
-        // console.log("2. Current plain text captured:", currentText);
         
         let changesMade = false;
 
         const fixableBiases = this.currentBiases.filter((bias, index) => {
-            // console.log(`\nEvaluating Bias [${index}]:`, bias);
-            
             const hasAlt = bias.alternatives && bias.alternatives.length > 0;
             const firstAlt = hasAlt ? bias.alternatives[0] : "NONE";
             const isValidAlt = firstAlt && !firstAlt.startsWith('(');
-            const hasPosition = bias.position && typeof bias.position.start !== 'undefined';
-            
-            // console.log(`  - hasAlt: ${hasAlt} (First alt: ${firstAlt})`);
-            // console.log(`  - isValidAlt: ${isValidAlt}`);
-            // console.log(`  - hasPosition: ${hasPosition}`);
-            
+            const hasPosition = bias.position && typeof bias.position.start !== 'undefined';           
             return hasAlt && isValidAlt && hasPosition;
         });
-
-        // console.log("\n3. Fixable biases surviving the filter:", fixableBiases);
-
         if (fixableBiases.length === 0) {
             alert("No automatic fixes available. The remaining issues require manual rephrasing.");
             return;
@@ -395,21 +417,17 @@ class NeutralNet {
             const start = bias.position.start;
             const end = bias.position.end;
             
-            // console.log(`4. Slicing text from index ${start} to ${end}. Replacing "${currentText.slice(start, end)}" with "${replacement}"`);
             currentText = currentText.slice(0, start) + replacement + currentText.slice(end);
             changesMade = true;
         });
 
         if (changesMade) {
-            // console.log("5. Updating DOM with new text:", currentText);
             this.editableDiv.textContent = currentText;
             this.textInput.value = currentText;
             
             setTimeout(() => {
                 this.editableDiv.dispatchEvent(new Event('input'));
             }, 100);
-        } else {
-            // console.log("5. No changes were made to the text.");
         }
     }
     
@@ -436,19 +454,33 @@ class NeutralNet {
         });
         this.realTimeBiases.textContent = '0';
         
-        if (!biases || biases.length === 0) return;
+        let chartData = { agentic: 0, communal: 0, gendered: 0, pronoun: 0, stereotype: 0 };
+
+        if (!biases || biases.length === 0) {
+            this.updateChartData(chartData);
+            return;
+        }
         
         const typeMapping = {
             'pronoun': 'pronoun',
             'agentic_communal': 'agentic_communal',
             'gendered_terms': 'gendered_terms', 
             'stereotype': 'stereotype',
-            'stereotyped': 'stereotype'
+            'stereotyped': 'stereotype' 
         };
         
         const counts = {};
         biases.forEach(bias => {
             const backendType = bias.type || 'unknown';
+            
+            if (backendType === 'agentic_communal') {
+                if (bias.description && bias.description.includes("Agentic")) chartData.agentic++;
+                else chartData.communal++;
+            }
+            if (backendType === 'gendered_terms') chartData.gendered++;
+            if (backendType === 'pronoun') chartData.pronoun++;
+            if (backendType === 'stereotype' || backendType === 'stereotyped') chartData.stereotype++;
+
             const frontendType = typeMapping[backendType] || backendType;
             counts[frontendType] = (counts[frontendType] || 0) + 1;
         });
@@ -460,6 +492,20 @@ class NeutralNet {
         });
         
         this.realTimeBiases.textContent = biases.length;
+        
+        this.updateChartData(chartData);
+    }
+
+    updateChartData(data) {
+        if (!this.biasChart) return;
+        this.biasChart.data.datasets[0].data = [
+            data.agentic, 
+            data.communal, 
+            data.gendered, 
+            data.pronoun, 
+            data.stereotype
+        ];
+        this.biasChart.update();
     }
     
     updateSuggestions(biases) {
@@ -530,11 +576,7 @@ class NeutralNet {
     loadDemoText() {
         this.saveCursorPosition();
         
-        const demoText = `The CEO announced his vision for the company's future. He was very aggressive in pursuing new markets and made decisive moves that showed strong leadership.
-
-Meanwhile, the nurses in our hospital provide emotional support to patients. They are always caring and nurturing, which makes them perfect for their roles.
-
-The chairman will present the award to the best engineer, while the stewardess will assist passengers with their needs.`;
+        const demoText = "We are looking to hire a new salesman for the lead position. The ideal candidate must be highly aggressive in client negotiations. Furthermore, every developer must test his own code before deployment. She is quite a good developer for a woman.";
 
         this.editableDiv.textContent = demoText;
         
@@ -568,6 +610,52 @@ The chairman will present the award to the best engineer, while the stewardess w
             this.editableDiv.focus();
             this.setCursorToEnd();
         }, 100);
+    }
+
+    async handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        event.target.value = '';
+
+        this.updateStatus('analyzing');
+        this.statusIndicator.textContent = '● Extracting text...';
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('http://localhost:8000/api/upload-document/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCookie('csrftoken')
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.ignoredBiases.clear();
+                this.editableDiv.textContent = data.text;
+                
+                setTimeout(() => {
+                    this.editableDiv.dispatchEvent(new Event('input'));
+                }, 100);
+                
+                setTimeout(() => {
+                    this.editableDiv.focus();
+                    this.setCursorToEnd();
+                }, 200);
+            } else {
+                alert('Error extracting text: ' + data.error);
+                this.updateStatus('error');
+            }
+        } catch (error) {
+            console.error('Upload failed:', error);
+            alert('Failed to connect to the server for upload.');
+            this.updateStatus('error');
+        }
     }
     
     closeAllTooltips() {

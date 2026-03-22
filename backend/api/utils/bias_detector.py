@@ -1,5 +1,6 @@
 import re
 import uuid
+import math
 from typing import Dict, List, Any
 from .bias_patterns import BiasType, BiasPatterns
 from .text_processor import TextProcessor
@@ -129,26 +130,29 @@ class BiasDetector:
         }
     
     def _calculate_overall_score(self, biases: List[Dict], word_count: int, pronoun_stats: Dict) -> int:
-        effective_length = max(word_count, 60)
-        
         weights = {
-            'stereotype': 30,         
-            'gendered_terms': 10,     
-            'agentic_communal': 5,    
-            'pronoun': 5
+            'stereotype': 15.0,
+            'pronoun': 5.0,
+            'gendered_terms': 5.0,
+            'agentic_communal': 3.0
         }
-        
-        total_penalty_points = 0
+
+        total_penalty = 0.0
         for bias in biases:
-            b_type = bias.get('type', 'other')
-            total_penalty_points += weights.get(b_type, 5)
+            bias_type = bias.get('type','other')
+            weight = weights.get(bias_type, 5.0)
 
-        density_penalty = (total_penalty_points / effective_length) * 100
+            confidence = bias.get('confidence') or 1.0
+            if confidence > 1: confidence /= 100.0
+
+            total_penalty += weight*confidence
         
-        bias_free_score = max(0, 100 - density_penalty)
+        effective_length = max(word_count, 30)
+        penalty_density = (total_penalty/effective_length)*100
+        k_factor = 0.025
+        bias_free_score = 100.0 * math.exp(-k_factor*penalty_density)
 
-        pronoun_score = pronoun_stats.get("pronoun_balance", 100)
+        pronoun_balance = pronoun_stats.get('pronoun_balance', 100.0)
+        final_score = (bias_free_score*0.85) + (pronoun_balance*0.15)
 
-        final_score = (bias_free_score * 0.8) + (pronoun_score * 0.2)
-        
-        return int(final_score)
+        return int(max(0, min(100, final_score)))

@@ -7,6 +7,9 @@ from django.apps import apps
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse
 import json
+import io
+from pypdf import PdfReader
+import docx
 
 class NumpyEncoder(DjangoJSONEncoder):
     def default(self, obj):
@@ -93,3 +96,39 @@ class ApplySuggestionView(View):
                 'success': False,
                 'error': str(e)
             }, status=500)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DocumentUploadView(View):
+    def post(self, request):
+        try:
+            if 'file' not in request.FILES:
+                return JsonResponse({'success': False, 'error': 'No file uploaded'}, status=400)
+                
+            uploaded_file = request.FILES['file']
+            file_name = uploaded_file.name.lower()
+            extracted_text = ""
+
+            if file_name.endswith('.pdf'):
+                pdf_reader = PdfReader(uploaded_file)
+                for page in pdf_reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        extracted_text += text + "\n"
+            elif file_name.endswith('.docx'):
+                doc = docx.Document(uploaded_file)
+                for para in doc.paragraphs:
+                    extracted_text += para.text + "\n"
+            else:
+                return JsonResponse({'success': False, 'error': 'Unsupported file format. Please upload PDF or DOCX.'}, status=400)
+
+            extracted_text = extracted_text.replace('\u00A0', ' ').strip()
+
+            return JsonResponse({
+                'success': True,
+                'text': extracted_text
+            })
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
