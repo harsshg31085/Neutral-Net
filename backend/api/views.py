@@ -25,6 +25,7 @@ class RealTimeAnalyzeView(View):
         try:
             data = json.loads(request.body)
             text = data.get('text', '')
+            ignored_texts = data.get('ignored_texts', [])
             
             if not text.strip():
                 return JsonResponse({
@@ -43,7 +44,7 @@ class RealTimeAnalyzeView(View):
                 from .utils.bias_detector import BiasDetector
                 detector = BiasDetector()
 
-            analysis = detector.analyze_text(text)
+            analysis = detector.analyze_text(text, ignored_texts)
             
             response_data = {
                 'text': text,

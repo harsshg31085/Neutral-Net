@@ -28,10 +28,14 @@ class BiasDetector:
             "sentence_count": 0
         }
     
-    def analyze_text(self, text: str) -> Dict[str, Any]:
+    def analyze_text(self, text: str, ignored_texts: List[str] = None) -> Dict[str, Any]:
+        if ignored_texts is None: ignored_texts = []
+
         text = text.strip()
         if not text:
             return self.empty_result
+        
+        ignored_set = set(t.lower() for t in ignored_texts)
         
         biases = []
         blocked_ranges = []
@@ -95,8 +99,19 @@ class BiasDetector:
         except Exception as e:
             print(f"Error in gendered detection: {e}")
 
-        pronoun_stats = self.processor.calculate_pronoun_stats(text)
+        filtered_biases = []
+        for bias in biases:
+            start = bias['position']['start']
+            end = bias['position']['end']
+            
+            actual_text = text[start:end].lower()
+            
+            if actual_text not in ignored_set:
+                filtered_biases.append(bias)
+        
+        biases = filtered_biases
 
+        pronoun_stats = self.processor.calculate_pronoun_stats(text)
         word_count = len(text.split())
         overall_score = self._calculate_overall_score(biases, word_count, pronoun_stats)
 

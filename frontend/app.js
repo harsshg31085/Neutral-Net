@@ -2,6 +2,7 @@ class NeutralNet {
     constructor() {
         this.currentText = '';
         this.currentBiases = [];
+        this.ignoredBiases = new Set(); 
         this.debounceTimer = null;
         this.currentSuggestion = null;
         this.lastCursorPosition = null;
@@ -33,7 +34,6 @@ class NeutralNet {
             'pronoun': document.getElementById('count-pronoun'),
             'agentic_communal': document.getElementById('count-agentic'),
             'gendered_terms': document.getElementById('count-gendered'),
-            'semantic': document.getElementById('count-semantic'),
             'stereotype': document.getElementById('count-stereotype'),
             'stereotyped': document.getElementById('count-stereotype')
         };
@@ -59,6 +59,7 @@ class NeutralNet {
         
         document.getElementById('clear-btn').addEventListener('click', () => this.clearText());
         document.getElementById('demo-btn').addEventListener('click', () => this.loadDemoText());
+        document.getElementById('fix-all-btn').addEventListener('click', () => this.fixAllBiases()); 
     }
     
     setupEventListeners() {
@@ -163,7 +164,6 @@ class NeutralNet {
         
         const plainText = this.getPlainTextFromEditable();
         this.currentText = plainText;
-        
         this.textInput.value = plainText;
         
         const words = plainText.trim() ? plainText.trim().split(/\s+/).length : 0;
@@ -192,7 +192,6 @@ class NeutralNet {
         }
         
         let text = tempDiv.textContent || tempDiv.innerText || '';
-        
         text = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
         return text;
     }
@@ -211,7 +210,10 @@ class NeutralNet {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': this.getCookie('csrftoken')
                 },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({ 
+                    text: text,
+                    ignored_texts: Array.from(this.ignoredBiases) 
+                })
             });
             
             if (!response.ok) {
@@ -222,7 +224,6 @@ class NeutralNet {
             this.currentBiases = data.biases || [];
             
             this.isUpdatingHighlights = true;
-            
             await this.updateEditableWithHighlights(data.highlighted_html || data.highlighted_text, text);
             
             this.updateScore(data.overall_score || data.score);
@@ -252,9 +253,7 @@ class NeutralNet {
                 .replace(/\s+/g, ' ');
             
             this.editableDiv.innerHTML = processedHtml;
-            
             this.editableDiv.scrollTop = scrollTop;
-            
             this.editableDiv.setAttribute('contenteditable', 'true');
             
             this.setupBiasClickHandlers();
@@ -290,37 +289,36 @@ class NeutralNet {
     }
     
     setCursorToEnd() {
-        const range = document.createRange();
-        const selection = window.getSelection();
-        
-        if (this.editableDiv.childNodes.length > 0) {
-            const lastNode = this.editableDiv.lastChild;
-            if (lastNode.nodeType === Node.TEXT_NODE) {
-                range.setStart(lastNode, lastNode.length);
+        try {
+            const range = document.createRange();
+            const selection = window.getSelection();
+            
+            if (this.editableDiv.childNodes.length > 0) {
+                const lastNode = this.editableDiv.lastChild;
+                if (lastNode.nodeType === Node.TEXT_NODE) {
+                    range.setStart(lastNode, lastNode.length);
+                } else {
+                    range.setStartAfter(lastNode);
+                }
+                range.collapse(true);
             } else {
-                range.setStartAfter(lastNode);
+                range.selectNodeContents(this.editableDiv);
+                range.collapse(false);
             }
-            range.collapse(true);
-        } else {
-            range.selectNodeContents(this.editableDiv);
-            range.collapse(false);
+            
+            selection.removeAllRanges();
+            selection.addRange(range);
+            this.editableDiv.focus();
+        } catch (e) {
+            console.warn("Cursor reposition skipped (normal during popup dismissals).");
         }
-        
-        selection.removeAllRanges();
-        selection.addRange(range);
-        
-        this.editableDiv.focus();
     }
     
     handlePaste(e) {
         e.preventDefault();
-        
         this.saveCursorPosition();
-        
         const text = e.clipboardData.getData('text/plain');
-        
         document.execCommand('insertText', false, text);
-        
         this.editableDiv.dispatchEvent(new Event('input'));
     }
     
@@ -353,10 +351,70 @@ class NeutralNet {
             this.shouldSkipNextAnalysis = false;
         }
     }
+
+    fixAllBiases() {
+        // console.log("--- FIX ALL BUTTON CLICKED ---");
+        // console.log("1. Raw currentBiases array:", JSON.parse(JSON.stringify(this.currentBiases)));
+
+        if (!this.currentBiases || this.currentBiases.length === 0) {
+            // console.warn("ABORT: currentBiases is empty or undefined.");
+            return;
+        }
+        
+        let currentText = this.getPlainTextFromEditable();
+        // console.log("2. Current plain text captured:", currentText);
+        
+        let changesMade = false;
+
+        const fixableBiases = this.currentBiases.filter((bias, index) => {
+            // console.log(`\nEvaluating Bias [${index}]:`, bias);
+            
+            const hasAlt = bias.alternatives && bias.alternatives.length > 0;
+            const firstAlt = hasAlt ? bias.alternatives[0] : "NONE";
+            const isValidAlt = firstAlt && !firstAlt.startsWith('(');
+            const hasPosition = bias.position && typeof bias.position.start !== 'undefined';
+            
+            // console.log(`  - hasAlt: ${hasAlt} (First alt: ${firstAlt})`);
+            // console.log(`  - isValidAlt: ${isValidAlt}`);
+            // console.log(`  - hasPosition: ${hasPosition}`);
+            
+            return hasAlt && isValidAlt && hasPosition;
+        });
+
+        // console.log("\n3. Fixable biases surviving the filter:", fixableBiases);
+
+        if (fixableBiases.length === 0) {
+            alert("No automatic fixes available. The remaining issues require manual rephrasing.");
+            return;
+        }
+
+        fixableBiases.sort((a, b) => b.position.start - a.position.start);
+
+        fixableBiases.forEach(bias => {
+            const replacement = bias.alternatives[0];
+            const start = bias.position.start;
+            const end = bias.position.end;
+            
+            // console.log(`4. Slicing text from index ${start} to ${end}. Replacing "${currentText.slice(start, end)}" with "${replacement}"`);
+            currentText = currentText.slice(0, start) + replacement + currentText.slice(end);
+            changesMade = true;
+        });
+
+        if (changesMade) {
+            // console.log("5. Updating DOM with new text:", currentText);
+            this.editableDiv.textContent = currentText;
+            this.textInput.value = currentText;
+            
+            setTimeout(() => {
+                this.editableDiv.dispatchEvent(new Event('input'));
+            }, 100);
+        } else {
+            // console.log("5. No changes were made to the text.");
+        }
+    }
     
     updateScore(score) {
         const safeScore = Math.max(0, Math.min(100, score || 100));
-        
         const circumference = 2 * Math.PI * 16; 
         const offset = circumference - (safeScore / 100) * circumference;
         this.scoreCircle.style.strokeDashoffset = offset;
@@ -384,7 +442,6 @@ class NeutralNet {
             'pronoun': 'pronoun',
             'agentic_communal': 'agentic_communal',
             'gendered_terms': 'gendered_terms', 
-            'semantic': 'semantic',
             'stereotype': 'stereotype',
             'stereotyped': 'stereotype'
         };
@@ -399,8 +456,6 @@ class NeutralNet {
         Object.entries(counts).forEach(([type, count]) => {
             if (this.biasCounts[type]) {
                 this.biasCounts[type].textContent = count;
-            } else {
-                console.warn(`No counter element found for bias type: ${type}`);
             }
         });
         
@@ -412,7 +467,6 @@ class NeutralNet {
             this.showEmptySuggestions();
             return;
         }
-        
         const recentBiases = biases.slice(0, 3);
         this.renderSuggestions(recentBiases);
     }
@@ -440,7 +494,6 @@ class NeutralNet {
                     </button>
                 </div>
             `;
-            
             this.suggestionsContainer.appendChild(suggestion);
         });
     }
@@ -500,6 +553,7 @@ The chairman will present the award to the best engineer, while the stewardess w
         this.textInput.value = '';
         this.currentText = '';
         this.currentBiases = [];
+        this.ignoredBiases.clear(); 
         this.lastCursorPosition = null;
         this.shouldSkipNextAnalysis = false;
         
@@ -587,10 +641,16 @@ function showBiasSuggestion(biasId) {
                     id="custom-replace-${biasId}" 
                     placeholder="Or enter custom replacement..." 
                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 12px;">
-            <button onclick="applyCustomSuggestion('${biasId}')" 
-                    style="width: 100%; padding: 12px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                Apply Change
-            </button>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="applyCustomSuggestion('${biasId}')" 
+                        style="flex: 2; padding: 12px; background: #4f46e5; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    Apply Change
+                </button>
+                <button onclick="ignoreBias('${biasId}')" 
+                        style="flex: 1; padding: 12px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    Ignore
+                </button>
+            </div>
         </div>
     `;
     
@@ -616,16 +676,10 @@ function closeAllPopups() {
 }
 
 function applySuggestion(biasId, replacement) {
-    console.log('applySuggestion called:', { biasId, replacement });
-    
     const bias = neutralNet.currentBiases.find(b => b.id === biasId);
-    if (!bias) {
-        console.error('Bias not found:', biasId);
-        return;
-    }
+    if (!bias) return;
     
     const editor = neutralNet.editableDiv;
-    
     const biasElement = editor.querySelector(`span[data-bias-id="${biasId}"]`);
     
     if (biasElement) {
@@ -633,15 +687,16 @@ function applySuggestion(biasId, replacement) {
         replacementSpan.textContent = replacement;
         replacementSpan.style.color = '#059669';
         replacementSpan.style.fontWeight = '600';
-        
         biasElement.replaceWith(replacementSpan);
-        console.log('Direct DOM replacement successful');
     } else {
-        console.log('Direct element not found, using text replacement');
         const currentText = editor.textContent || editor.innerText;
-        const escapedText = bias.target_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const updatedText = currentText.replace(new RegExp(escapedText, 'g'), replacement);
-        editor.textContent = updatedText;
+        const targetText = bias.text || bias.target_text || bias.targetText || "";
+        const escapedText = targetText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        if (escapedText) {
+            const updatedText = currentText.replace(new RegExp(escapedText, 'g'), replacement);
+            editor.textContent = updatedText;
+        }
     }
     
     const plainText = neutralNet.getPlainTextFromEditable();
@@ -663,7 +718,6 @@ function applySuggestionFromList(biasId, buttonElement) {
         alert('Please enter a replacement text.');
         return;
     }
-    
     applySuggestion(biasId, replacement);
 }
 
@@ -674,10 +728,47 @@ function applyCustomSuggestion(biasId) {
     }
 }
 
+function ignoreBias(biasId) {
+    console.log("--- IGNORE BUTTON CLICKED ---");
+    
+    const bias = neutralNet.currentBiases.find(b => b.id === biasId);
+    if (!bias) {
+        console.warn("ABORT: Could not find bias ID in current array.");
+        return;
+    }
+
+    let wordToIgnore = bias.text || bias.target_text || bias.targetText;
+
+    if (!wordToIgnore && bias.position) {
+        console.warn("Text keys missing! Falling back to coordinate extraction...");
+        const currentText = neutralNet.getPlainTextFromEditable();
+        wordToIgnore = currentText.slice(bias.position.start, bias.position.end);
+    }
+
+    if (wordToIgnore) {
+        const cleanWord = wordToIgnore.toLowerCase().trim();
+        console.log(`Successfully extracted word to ignore: "${cleanWord}"`);
+        
+        neutralNet.ignoredBiases.add(cleanWord);
+        console.log("Current Ignored List being sent to backend:", Array.from(neutralNet.ignoredBiases));
+        
+        neutralNet.statusIndicator.textContent = '● Updating...';
+        neutralNet.statusIndicator.style.color = '#f59e0b';
+        
+        const currentText = neutralNet.getPlainTextFromEditable();
+        neutralNet.analyzeText(currentText);
+    } else {
+        console.error("CRITICAL: Could not determine what text to ignore from this bias object:", bias);
+    }
+    
+    closeAllPopups();
+}
+
 window.showBiasSuggestion = showBiasSuggestion;
 window.closeAllPopups = closeAllPopups;
 window.applySuggestion = applySuggestion;
 window.applyCustomSuggestion = applyCustomSuggestion;
+window.ignoreBias = ignoreBias; 
 
 let neutralNet;
 document.addEventListener('DOMContentLoaded', () => {
