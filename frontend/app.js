@@ -32,6 +32,7 @@ class NeutralNet {
         this.editorPanel = document.querySelector('.editor-panel');
         this.fileInput = document.getElementById('file-upload');
         this.uploadBtn = document.getElementById('upload-btn');
+        this.exportBtn = document.getElementById('export-btn');
         
         this.biasCounts = {
             'pronoun': document.getElementById('count-pronoun'),
@@ -59,7 +60,8 @@ class NeutralNet {
         });
 
         this.uploadBtn.addEventListener('click', () => this.fileInput.click());
-        this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e))
+        this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+        this.exportBtn.addEventListener('click', () => this.exportText());
         
         window.addEventListener('resize', () => this.adjustEditorHeight());
         
@@ -182,6 +184,26 @@ class NeutralNet {
                 plugins: { legend: { display: false } }
             }
         });
+    }
+
+    exportText() {
+        const text = this.getPlainTextFromEditable();
+        if (!text.trim()) {
+            alert("The editor is empty. Nothing to export.");
+            return;
+        }
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'download.txt'; 
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        this.updateStatus('success');
+        this.statusIndicator.textContent = '● Exported successfully';
     }
     
     handleTextInput(e) {

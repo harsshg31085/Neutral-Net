@@ -1,6 +1,7 @@
 import re
 import uuid
 import math
+from functools import lru_cache
 from typing import Dict, List, Any
 from .bias_patterns import BiasType, BiasPatterns
 from .text_processor import TextProcessor
@@ -17,6 +18,9 @@ class BiasDetector:
         self.gendered_terms_detector = GenderedTermsDetector()
         self.stereotype_detector = StereotypeDetector()
         self.pronoun_detector = PronounBiasDetector()
+
+        self.cached_agentic = lru_cache(maxsize=1024)(self.agentic_communal_detector.analyze_sentence)
+        self.cached_stereotype = lru_cache(maxsize=1024)(self.stereotype_detector.analyze_sentence)
 
         self.empty_result = {
             "text": "",
@@ -46,35 +50,34 @@ class BiasDetector:
         
         for sentence in sentences:
             start_index = text.find(sentence, current_pos)
-            if start_index == -1: continue
-            
+            if start_index == -1: continue            
             sent_end = start_index + len(sentence)
             
             try:
-                stereotype_result = self.stereotype_detector.analyze_sentence(sentence)
-                if stereotype_result:
+                cached_stereotype = self.cached_stereotype(sentence)
+                if cached_stereotype:
+                    stereotype_result = cached_stereotype.copy()
+                    stereotype_result['position'] = cached_stereotype['position'].copy()                    
                     stereotype_result['position']['start'] += start_index
-                    stereotype_result['position']['end'] += start_index
-                    
+                    stereotype_result['position']['end'] += start_index                    
                     biases.append(stereotype_result)
-                    blocked_ranges.append((start_index, sent_end))
-                    
+                    blocked_ranges.append((start_index, sent_end))                    
                     current_pos = sent_end
                     continue 
             except Exception as e:
                 print(f"Error in stereotype detection: {e}")
 
-            agentic_communal_results = self.agentic_communal_detector.analyze_sentence(sentence)
+            cached_agentic_results = self.cached_agentic(sentence)
             
-            for result in agentic_communal_results:
-                start = result['position']['start']
-                end = result['position']['end']
-
-                result['id'] = str(uuid.uuid4())
-                result['position']['start'] = start_index + start
-                result['position']['end'] = start_index + end
-
-                biases.append(result)
+            for result in cached_agentic_results:
+                res_copy = result.copy()
+                res_copy['position'] = result['position'].copy()                
+                start = res_copy['position']['start']
+                end = res_copy['position']['end']
+                res_copy['id'] = str(uuid.uuid4())
+                res_copy['position']['start'] = start_index + start
+                res_copy['position']['end'] = start_index + end
+                biases.append(res_copy)
             
             current_pos = sent_end
 

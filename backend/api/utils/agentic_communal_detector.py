@@ -16,9 +16,7 @@ class AgenticCommunalDetector:
             self.nlp = spacy.load("en_core_web_sm")
 
         self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
-
         self.entity_model = GLiNER.from_pretrained("urchade/gliner_small-v2.1")
-        
         self.fixer = pipeline("fill-mask", model="distilroberta-base")
                 
         self.human_anchors = self.encoder.encode([
@@ -66,16 +64,13 @@ class AgenticCommunalDetector:
         self.last_subject_was_human = False
 
     def get_dynamic_subject_type(self, text, subject_text):
-        if not subject_text: return "UNKNOWN"
-        
+        if not subject_text: return "UNKNOWN"        
         labels = [
             "Person", "Job Role", "Family Member", "Individual", 
             "Animal", 
             "Group of People", "Organization", "Technology", "Inanimate Object", "Abstract Concept"
-        ]
-        
-        entities = self.entity_model.predict_entities(text, labels, threshold=0.3)
-        
+        ]       
+        entities = self.entity_model.predict_entities(text, labels, threshold=0.3)       
         for ent in entities:
             if subject_text.lower() in ent['text'].lower() or ent['text'].lower() in subject_text.lower():
                 label = ent['label']
@@ -84,18 +79,17 @@ class AgenticCommunalDetector:
                 elif label in ["Animal"]:
                     return "ANIMAL"
                 elif label in ["Group of People", "Organization", "Technology", "Inanimate Object", "Abstract Concept"]:
-                    return "NON_HUMAN"
-                    
+                    return "NON_HUMAN"                    
         return "UNKNOWN"
 
     def get_subject(self, text):
         doc = self.nlp(text)
         candidates = []
-        
+
         for token in doc:
             if "nsubj" in token.dep_:
                 candidates.append(token)
-        
+       
         for cand in candidates:
             if cand.text.lower() in ["it", "this", "that", "which", "who", "whom"]:
                 continue 
@@ -137,10 +131,8 @@ class AgenticCommunalDetector:
             if token.pos_ not in ["ADJ", "ADV", "VERB", "NOUN"]: continue
             if token.is_stop or len(token.text) < 3: continue
             if token.dep_ == 'pobj': continue
-
             if token.lemma_.lower() in self.technical_containers:
                 continue
-
             if any(child.dep_ == 'neg' for child in token.children): continue
             
             target_noun = None

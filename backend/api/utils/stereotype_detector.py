@@ -7,24 +7,23 @@ from django.conf import settings
 
 class StereotypeDetector:
     def __init__(self):
-        self.DETECTOR_PATH = os.path.join(settings.BASE_DIR, "models", "stereotype_detector")
-        self.REWRITER_PATH = os.path.join(settings.BASE_DIR, "models", "stereotype_fixer")
+        self.HF_REPO_ID = "Harssh3108/neutral-net-models"
         self.THRESHOLD = 0.85
 
         try:
-            self.detector_tokenizer = AutoTokenizer.from_pretrained(self.DETECTOR_PATH)
-            self.detector_model = AutoModelForSequenceClassification.from_pretrained(self.DETECTOR_PATH)
+            self.detector_tokenizer = AutoTokenizer.from_pretrained(self.HF_REPO_ID, subfolder="stereotype_detector")
+            self.detector_model = AutoModelForSequenceClassification.from_pretrained(self.HF_REPO_ID, subfolder="stereotype_detector")
             self.detector_model.eval()
         except Exception as e:
-            print(f"FAILED to load Stereotype Classifier from {self.DETECTOR_PATH}. Error: {e}")
+            print(f"FAILED to load Stereotype Classifier from {self.HF_REPO_ID}/stereotype_detector. Error: {e}")
             self.detector_model = None
 
         try:
-            self.rewriter_tokenizer = AutoTokenizer.from_pretrained(self.REWRITER_PATH)
-            self.rewriter_model = AutoModelForSeq2SeqLM.from_pretrained(self.REWRITER_PATH)
+            self.rewriter_tokenizer = AutoTokenizer.from_pretrained(self.HF_REPO_ID, subfolder="stereotype_fixer")
+            self.rewriter_model = AutoModelForSeq2SeqLM.from_pretrained(self.HF_REPO_ID, subfolder="stereotype_fixer")
             self.rewriter_model.eval()
         except Exception as e:
-            print(f"FAILED to load Stereotype Rewriter from {self.REWRITER_PATH}. Error: {e}")
+            print(f"FAILED to load Stereotype Rewriter from {self.HF_REPO_ID}/stereotype_fixer. Error: {e}")
             self.rewriter_model = None
 
     def predict_bias(self, text):
