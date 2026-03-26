@@ -285,6 +285,14 @@ class NeutralNet {
             }
             
             const data = await response.json();
+
+            console.log("BACKEND PAYLOAD:", data);
+
+            const currentText = this.getPlainTextFromEditable();
+            if (currentText !== text) {
+                return;
+            }
+
             this.currentBiases = data.biases || [];
             
             this.isUpdatingHighlights = true;

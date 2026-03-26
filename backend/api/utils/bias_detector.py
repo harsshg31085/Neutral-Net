@@ -117,7 +117,7 @@ class BiasDetector:
 
         pronoun_stats = self.processor.calculate_pronoun_stats(text)
         word_count = len(text.split())
-        overall_score = self._calculate_overall_score(biases, word_count, pronoun_stats)
+        overall_score = self._calculate_overall_score(biases, word_count)
 
         highlighted_text = self.processor.highlight_text_with_biases(text, biases)
         
@@ -132,7 +132,7 @@ class BiasDetector:
             "sentence_count": len(sentences)
         }
     
-    def _calculate_overall_score(self, biases: List[Dict], word_count: int, pronoun_stats: Dict) -> int:
+    def _calculate_overall_score(self, biases: List[Dict], word_count: int) -> int:
         weights = {
             'stereotype': 15.0,
             'pronoun': 5.0,
@@ -153,9 +153,6 @@ class BiasDetector:
         effective_length = max(word_count, 30)
         penalty_density = (total_penalty/effective_length)*100
         k_factor = 0.025
-        bias_free_score = 100.0 * math.exp(-k_factor*penalty_density)
-
-        pronoun_balance = pronoun_stats.get('pronoun_balance', 100.0)
-        final_score = (bias_free_score*0.85) + (pronoun_balance*0.15)
+        final_score = 100.0 * math.exp(-k_factor*penalty_density)
 
         return int(max(0, min(100, final_score)))
