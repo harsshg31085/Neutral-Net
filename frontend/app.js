@@ -1,3 +1,8 @@
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_BASE_URL = isLocalhost 
+    ? 'http://localhost:8000' 
+    : 'https://your-username-neutral-net-api.hf.space';
+
 class NeutralNet {
     constructor() {
         this.currentText = '';
@@ -263,7 +268,7 @@ class NeutralNet {
         }
         
         try {
-            const response = await fetch('http://localhost:8000/api/real-time-analyze/', {
+            const response = await fetch(`${API_BASE_URL}/api/real-time-analyze/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -627,6 +632,18 @@ class NeutralNet {
         }
         
         this.updateUIWithEmptyResults();
+
+        const wordCountEl = document.getElementById('word-count') || this.wordCount;
+        if(wordCountEl){
+            wordCountEl.textContent = '0';
+        }
+
+        const wordCountTop = document.getElementById('real-time-words');
+        if(wordCountTop){
+            wordCountTop.textContent = '0';
+        }
+
+        this.updateBiasCounts([]);
         
         setTimeout(() => {
             this.editableDiv.focus();
@@ -647,7 +664,7 @@ class NeutralNet {
         formData.append('file', file);
 
         try {
-            const response = await fetch('http://localhost:8000/api/upload-document/', {
+            const response = await fetch(`${API_BASE_URL}/api/upload-document/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': this.getCookie('csrftoken')

@@ -114,6 +114,55 @@ class PronounBiasDetector:
         
         return False
 
+    @staticmethod
+    def _get_pronoun_and_verb(token):
+        text = token.text.lower()
+        dep = token.dep_
+        
+        if text in ['himself', 'herself']: alt_pronoun = 'themselves'
+        elif dep == 'poss': alt_pronoun = 'their'
+        elif dep in ['dobj', 'pobj', 'dative', 'iobj']: alt_pronoun = 'them'
+        elif text == 'hers' or (text == 'his' and dep != 'poss'): alt_pronoun = 'theirs'
+        else: alt_pronoun = 'they'
+        
+        if token.is_title: alt_pronoun = alt_pronoun.capitalize()
+        elif token.is_upper: alt_pronoun = alt_pronoun.upper()
+
+        verb_fix = None
+        target_verb = None
+
+        if dep in ['nsubj', 'nsubjpass']:
+            head = token.head
+            potential_verbs = []
+            
+            if head.pos_ in ["VERB", "AUX"]:
+                potential_verbs.append(head)
+            for child in head.children:
+                if child.dep_ in ['aux', 'auxpass', 'cop']:
+                    potential_verbs.append(child)
+
+            if potential_verbs:
+                target_verb = min(potential_verbs, key=lambda x: x.i)
+                
+                tag = target_verb.tag_
+                lemma = target_verb.lemma_.lower()
+                v_text = target_verb.text.lower()
+
+                if tag == "VBZ":
+                    if lemma == "be": verb_fix = "'re" if v_text == "'s" else "are"
+                    elif lemma == "have": verb_fix = "'ve" if v_text == "'s" else "have"
+                    elif lemma == "do": verb_fix = "do"
+                    else: verb_fix = lemma 
+                
+                elif tag == "VBD" and lemma == "be":
+                    verb_fix = "were" if v_text == "was" else None
+
+                if verb_fix:
+                    if target_verb.is_title: verb_fix = verb_fix.capitalize()
+                    elif target_verb.is_upper: verb_fix = verb_fix.upper()
+                    
+        return alt_pronoun, verb_fix, target_verb
+
     def analyze(self, text: str):
         if not text.strip(): return []
         
@@ -194,18 +243,37 @@ class PronounBiasDetector:
                     reason_text = f"The pronoun '{word}' is used in a generic context."
 
                 if is_bias:
-                    alt_word = suggestion_map.get(word, "they")
+                    alt_pronoun, verb_fix, target_verb = self._get_pronoun_and_verb(token)
                     
+                    doc_text = token.doc.text
+                    
+                    if verb_fix and target_verb:
+                        start_char = min(token.idx, target_verb.idx)
+                        end_char = max(token.idx + len(token.text), target_verb.idx + len(target_verb.text))
+                        highlight_text = doc_text[start_char:end_char]
+
+                        if token.i < target_verb.i:
+                            middle_text = doc_text[token.idx + len(token.text) : target_verb.idx]
+                            alt_text = f"{alt_pronoun}{middle_text}{verb_fix}"
+                        else:
+                            middle_text = doc_text[target_verb.idx + len(target_verb.text) : token.idx]
+                            alt_text = f"{verb_fix}{middle_text}{alt_pronoun}"
+                    else:
+                        start_char = token.idx
+                        end_char = token.idx + len(token.text)
+                        alt_text = alt_pronoun
+                        highlight_text = token.text
+
                     biases.append({
                         "id": str(uuid.uuid4()),
                         "type": "pronoun",
-                        "text": str(token.text),
+                        "text": highlight_text,
                         "description": reason_text,
-                        "suggestion": f"Consider using a gender-neutral pronoun like '{alt_word}'.",
-                        "alternatives": [alt_word],
+                        "suggestion": f"Consider using a gender-neutral structure like '{alt_text}'.",
+                        "alternatives": [alt_text],
                         "position": {
-                            "start": span.start_char,
-                            "end": span.end_char
+                            "start": start_char,
+                            "end": end_char
                         }
                     })
 
