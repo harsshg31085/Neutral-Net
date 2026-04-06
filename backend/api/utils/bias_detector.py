@@ -175,7 +175,7 @@ class BiasDetector:
             word_count (int): Total number of words in the analyzed text.
         
         Returns:
-            int: Final inclusivity score, boynded between 0 and 100.
+            int: Final inclusivity score, bounded between 0 and 100.
         """
 
         weights = {

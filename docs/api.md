@@ -81,7 +81,7 @@ Triggered when a user explicitly clicks to apply a suggested fix.
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
 | `original_text` | `string` | The state of the text before the fix. |
-| `bias-id` | `string` | The UUID of the string being fixed. |
+| `bias_id` | `string` | The UUID of the string being fixed. |
 | `replacement` | `string` | The fixed text |
 
 **Response (`200 OK`)**:
