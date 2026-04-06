@@ -43,8 +43,7 @@ class NeutralNet {
             'pronoun': document.getElementById('count-pronoun'),
             'agentic_communal': document.getElementById('count-agentic'),
             'gendered_terms': document.getElementById('count-gendered'),
-            'stereotype': document.getElementById('count-stereotype'),
-            'stereotyped': document.getElementById('count-stereotype')
+            'stereotype': document.getElementById('count-stereotype')
         };
     }
     
@@ -286,8 +285,6 @@ class NeutralNet {
             
             const data = await response.json();
 
-            console.log("BACKEND PAYLOAD:", data);
-
             const currentText = this.getPlainTextFromEditable();
             if (currentText !== text) {
                 return;
@@ -500,8 +497,7 @@ class NeutralNet {
             'pronoun': 'pronoun',
             'agentic_communal': 'agentic_communal',
             'gendered_terms': 'gendered_terms', 
-            'stereotype': 'stereotype',
-            'stereotyped': 'stereotype' 
+            'stereotype': 'stereotype'
         };
         
         const counts = {};
@@ -514,7 +510,7 @@ class NeutralNet {
             }
             if (backendType === 'gendered_terms') chartData.gendered++;
             if (backendType === 'pronoun') chartData.pronoun++;
-            if (backendType === 'stereotype' || backendType === 'stereotyped') chartData.stereotype++;
+            if (backendType === 'stereotype') chartData.stereotype++;
 
             const frontendType = typeMapping[backendType] || backendType;
             counts[frontendType] = (counts[frontendType] || 0) + 1;
@@ -611,7 +607,7 @@ class NeutralNet {
     loadDemoText() {
         this.saveCursorPosition();
         
-        const demoText = "We are looking to hire a new salesman for the lead position. The ideal candidate must be highly aggressive in client negotiations. Furthermore, every developer must test his own code before deployment. She is quite a good developer for a woman.";
+        const demoText = "We are looking to hire a new salesman for the lead position. The ideal candidate must be highly competent in client negotiations. Furthermore, every developer must test his own code before deployment. She is quite a good developer for a woman.";
 
         this.editableDiv.textContent = demoText;
         

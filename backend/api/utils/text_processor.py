@@ -3,14 +3,26 @@ import uuid
 from typing import Dict, List, Any, Tuple
 from .bias_patterns import BiasType, BiasPatterns
 
-class TextProcessor:    
+class TextProcessor:
+    """
+    A stateless class for string manipulation, regex matching and HTML generation.
+
+    Handles the text parsing required by the inference engines, and constructs the payload
+    for the UI
+    """
     @staticmethod
     def extract_sentences(text: str) -> List[str]:
+        """
+        Splits text into sentences using punctuation boundaries.
+        """
         sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if s.strip()]
     
     @staticmethod
     def find_word_positions(text: str, word: str) -> List[Tuple[int, int]]:
+        """
+        Locates the exact start and end points of a specific word
+        """
         positions = []
         pattern = re.compile(re.escape(word), re.IGNORECASE)
         
@@ -21,6 +33,10 @@ class TextProcessor:
     
     @staticmethod
     def calculate_pronoun_stats(text: str) -> Dict[str, Any]:
+        """
+        Generates a statistical breakdown of pronoun usage across the document.
+        NOTE: This function isn't functionally useful, and is old code.
+        """
         text_lower = text.lower()
         
         stats = {
@@ -56,6 +72,11 @@ class TextProcessor:
     
     @staticmethod
     def highlight_text_with_biases(text: str, biases: List[Dict]) -> str:
+        """
+        Injects the HTML spans into the raw text
+        Sorts all biases by starting pos to ensure linear injection. Includes
+        HTML escaping to avoid Cross-Site Scripting vulnerabilities.
+        """
         biases.sort(key=lambda x: x['position']['start'])
         
         output = []

@@ -6,7 +6,15 @@ import os
 from django.conf import settings
 
 class StereotypeDetector:
+    """
+    Detects and rewrites gender stereotypes using a dual-model custom pipeline
+
+    The engine relies on two models, both fine tuned specifically for this application:
+        - Sequence classification model to determine the probability of a stereotype.
+        - Seq2Seq Language Model to generate rewrites and reasons for the stereotype
+    """
     def __init__(self):
+        # Both the models are hosted on huggingface
         self.HF_REPO_ID = "Harssh3108/neutral-net-models"
         self.THRESHOLD = 0.85
 
@@ -15,7 +23,6 @@ class StereotypeDetector:
             self.detector_model = AutoModelForSequenceClassification.from_pretrained(self.HF_REPO_ID, subfolder="stereotype_detector")
             self.detector_model.eval()
         except Exception as e:
-            print(f"FAILED to load Stereotype Classifier from {self.HF_REPO_ID}/stereotype_detector. Error: {e}")
             self.detector_model = None
 
         try:
@@ -23,10 +30,15 @@ class StereotypeDetector:
             self.rewriter_model = AutoModelForSeq2SeqLM.from_pretrained(self.HF_REPO_ID, subfolder="stereotype_fixer")
             self.rewriter_model.eval()
         except Exception as e:
-            print(f"FAILED to load Stereotype Rewriter from {self.HF_REPO_ID}/stereotype_fixer. Error: {e}")
             self.rewriter_model = None
 
     def predict_bias(self, text):
+        """
+        Calculates the probability that a sentence contains a gender stereotype.
+
+        Uses a fine-tuned classification model to generate logits, applies
+        softmax activation to generate probabilities, and checks against a threshold
+        """
         if not self.detector_model: return {"bias": False, "confidence": 0.0}
 
         inputs = self.detector_tokenizer(
@@ -48,6 +60,12 @@ class StereotypeDetector:
         }
 
     def fix_bias(self, text):
+        """
+        Generates neutral rewrite and reasoning for the bias.
+
+        Uses beam search encoding on the Seq2Seq model to ensure high quality,
+        grammatically correct outputs.
+        """
         if not self.rewriter_model: return "Model unavailable", text
 
         input_text = f"Fix Gender Bias: {text}"
@@ -79,6 +97,9 @@ class StereotypeDetector:
         return reason, rewrite
 
     def analyze_sentence(self, sentence):
+        """
+        Evaluates a sentences, combining the response of both the models
+        """
         if not sentence.strip(): return None
 
         prediction = self.predict_bias(sentence)
@@ -86,7 +107,7 @@ class StereotypeDetector:
         if prediction['bias']:
             reason, rewrite = self.fix_bias(sentence)
 
-            if rewrite == "[MANUAL REWRITE]":
+            if rewrite == "[MANUAL REWRITE]": # Model response when it deems a sentence unfixable
                 return {
                     "id": str(uuid.uuid4()),
                     "text": sentence,

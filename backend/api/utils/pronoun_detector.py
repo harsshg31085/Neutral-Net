@@ -7,8 +7,13 @@ from .bias_patterns import (
 )
 
 class PronounBiasDetector:
+    """
+    Detects assumed gender roles using Neural Coreference Resolution and Dependency Parsing.
+    Uses fastcoref to link pronouns back to original subjects. Uses spacy to analyze grammatical context,
+    and determines if the sentence refers to a specific event, or a biased generic assumption.
+    Dynamically conjugates attached verbs to maintain subject-verb agreement.
+    """
     def __init__(self):
-        print("Loading Pronoun Coreference Models...")
         self.resolver = FCoref(device='cpu', enable_progress_bar=False)
         
         try:
@@ -66,7 +71,7 @@ class PronounBiasDetector:
         return False
 
     @classmethod
-    def is_strictly_episodic(cls, verb):
+    def is_episodic(cls, verb):
         if not verb: return False
         if cls.has_frequency_adverb(verb): return False
         for child in verb.children:
@@ -207,7 +212,7 @@ class PronounBiasDetector:
             if not is_anchored_entity:
                 for span in spans:
                     verb = self.get_governing_verb(span.root)
-                    if self.is_strictly_episodic(verb):
+                    if self.is_episodic(verb):
                         is_anchored_entity = True
                         break
 
@@ -233,7 +238,7 @@ class PronounBiasDetector:
                 reason_text = ""
 
                 if (self.is_role_noun(head_span) and verb is not None and not is_anchored_entity
-                    and not self.is_strictly_episodic(verb) and 
+                    and not self.is_episodic(verb) and 
                     (verb.tag_ in ["VBP", "VBZ"] or any(c.dep_ == "aux" and c.lemma_.lower() in OBLIGATION_MODALS for c in verb.children))):
                     is_bias = True
                     reason_text = f"The pronoun '{word}' is tied to a generic role rather than a specific person."

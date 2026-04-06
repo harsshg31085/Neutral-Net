@@ -6,6 +6,8 @@ Neutral Net is an AI-powered editor designed to detect, categorize and neutraliz
 ## Features
 - **Real-Time Multi-Model Detection** - Analyzes text instantly as you type, powered by specialized AI models (Transformer-based classification, Zero-Shot NER, and Neural Coreference Resolution)
 
+- **Absolute Privacy** - No part of the user's input is ever stored in permanent memory
+
 - **Bias Categorization** - Detects contextual bias across four categories:
   - **Stereotypes** - Blocks harmful generalizations at sentence/phrase level.
   - **Gendered-Terms** - Flags outdated roles ("chairman"), while ignoring safe contexts.
@@ -25,7 +27,8 @@ Neutral Net is an AI-powered editor designed to detect, categorize and neutraliz
 - **Sub-Document LRU Caching** - An optimized backend infrastructure that caches inference result and reduces latency by over 80%.
 
 ## Demo and Usage
-- **Live Website:** [neutral-net.vercel.app](https://neutral-net.vercel.app) or [Alternate Link](https://neutral-net-git-main-harsshg31085s-projects.vercel.app/) *(If neither of the links open, try using mobile hotspot. IITK wifi may block them)*
+- **Demo Video:** [Google Drive](https://drive.google.com/file/d/1R8zrHjYZnA7WqbkZg9Yw9FJi1YD2FWpK/view?usp=sharing)
+- **Live Website:** [neutral-net.vercel.app](https://neutral-net.vercel.app) or [Alternate Link 1](https://neutral-net-git-main-harsshg31085s-projects.vercel.app/), [Alternate Link 2](https://neutral-filbbq8bv-harsshg31085s-projects.vercel.app/) *(If none of the links open, try using mobile hotspot. IITK wifi may block them)*
 - **Backend API:** [Hugging Face Space](https://huggingface.co/spaces/Harssh3108/neutral-net-api) 
 
 *(Note: The API may take a while to boot up from sleep on the first request).*
@@ -73,12 +76,14 @@ npx http-server -p 3000
   - **Backend:** Python 3.11, Django, Django REST Frameworks (Containerized on Huggingface Spaces)
 
   - **AI and NLP Engine:**
-    - **Transformers:** Contextual sequence classification.
+    - **Transformers:** Contextual sequence classification, reasoning and rewrites.
     - **GLiNER:** Generalist and Lightweight Named Entity Recognition
     - **fastcoref:** Fast neural coreference resolution
     - **spaCy:** Grammatical dependency parsing
   
 ## Documentation
-For a much more comprehensive coverage Neutral Net's architecture and inner workings, check out [Documentation Folder](./docs/):
-  - **[Architecture Diagram](./docs/architecture.md)**
-  - **[API Endpoints](./docs/api.md)**
+For a much more comprehensive coverage of Neutral Net's architecture and inner workings, check out [Documentation Folder](./docs/):
+  - **[System Architecture](./docs/architecture.md)**
+  - **[Backend](./docs/backend.md)**
+  - **[Frontend](./docs/frontend.md)**
+  - **[API Usage](./docs/api.md)**

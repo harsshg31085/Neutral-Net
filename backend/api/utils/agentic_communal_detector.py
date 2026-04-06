@@ -7,6 +7,16 @@ from sentence_transformers import SentenceTransformer, util
 from gliner import GLiNER
 
 class AgenticCommunalDetector:
+    """
+    Detects subconscious tonal skew (Agentic vs Communal) in text relating to human subjects.
+
+    The architecture relies on multiple models:
+        - spacy: Grammatical dependency parsing and isolate adjectives and verbs.
+        - gliner: Zero shot NER to identify human subjects.
+        - sentence-transformers: Calculate cosine similarity of words against pre-defined 
+        Agentic and Communal anchors.
+        - distilroberta - Context-aware synonym generation for replacements.
+    """
     def __init__(self):        
         try:
             self.nlp = spacy.load("en_core_web_sm")
@@ -64,6 +74,9 @@ class AgenticCommunalDetector:
         self.last_subject_was_human = False
 
     def get_dynamic_subject_type(self, text, subject_text):
+        """
+        Uses GLINER to classify subject
+        """
         if not subject_text: return "UNKNOWN"        
         labels = [
             "Person", "Job Role", "Family Member", "Individual", 
@@ -83,6 +96,9 @@ class AgenticCommunalDetector:
         return "UNKNOWN"
 
     def get_subject(self, text):
+        """
+        Uses spacy (dependency parsing) to extract the nominal subject
+        """
         doc = self.nlp(text)
         candidates = []
 
@@ -124,6 +140,10 @@ class AgenticCommunalDetector:
         return False
 
     def find_biased_spans(self, text, skew_verdict, verbose=False):
+        """
+        Iterates through adjectives and verbs, calculates their semantic distance from bias anchors
+        and flags them if they modify a human subject.
+        """
         doc = self.nlp(text)
         spans = []
         
@@ -207,6 +227,10 @@ class AgenticCommunalDetector:
             return f"'{word}' is Communal. Ensure this doesn't overshadow leadership traits."
 
     def generate_replacements(self, text, token, bias_type):
+        """
+        Uses Distilroberta to generate contextual synonyms, and filters them
+        via cosine similarity to ensure they are tonally neutral
+        """
         masked_text = text[:token.idx] + self.fixer.tokenizer.mask_token + text[token.idx + len(token.text):]
         preds = self.fixer(masked_text, top_k=60)
         
@@ -249,8 +273,10 @@ class AgenticCommunalDetector:
         return final_suggestions[:3] if final_suggestions else ["(No neutral synonym found)"]
 
     def analyze_sentence(self, text, verbose=False):
-        if verbose: print(f"\n--- ANALYZING: '{text[:60]}...' ---")
-        
+        """
+        Resolves subjects, calculates global sentence skew and triggers targeted span extraction
+        if threshold exceeded.
+        """        
         raw_subject = self.get_subject(text)
         if verbose: print(f"[DEBUG] Raw Subject Found: '{raw_subject}'")
         
@@ -305,7 +331,7 @@ class AgenticCommunalDetector:
 
         if not is_strong_human:
             if max(agentic_score, communal_score) < 0.14:
-                if verbose: print("[DEBUG] EXIT: Failed Global Threshold (< 0.14)")
+                if verbose: print("[DEBUG] EXIT: Failed Global Threshold")
                 return []
 
         total_intensity = agentic_score + communal_score

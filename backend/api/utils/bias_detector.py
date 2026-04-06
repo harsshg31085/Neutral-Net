@@ -34,6 +34,29 @@ class BiasDetector:
         }
     
     def analyze_text(self, text: str, ignored_texts: List[str] = None) -> Dict[str, Any]:
+        """
+        Acts as the core inference engine. It segments the input text, and uses cached
+        transformer models for phrase-level bias detection (Agentic/Communal and Stereotype)
+        and document-level models for pronoun and gendered-term bias detection.
+
+        Enforces coordinate safe zones to ensure biases may never overlap.
+
+        Args:
+            text (str): The raw input string to be analyzed.
+            ignored_texts (List[str]): A list of words/phrases that the user has explicitly chosen to bypass.
+            Defaults to None.
+        
+        Returns:
+            Dict[str, Any]: An analysis containing:
+                - text (str): The original input text
+                - highlighted_text (str): HTML string with detected biases wrapped in UI spans.
+                - biases (List[Dict]): Detailed list of all biased objects.
+                - bias_count (int): Total count of biased objects.
+                - overall_score (int): The inclusivity score. Ranges from 0-100, inclusive.
+                - pronoun_stats (Dict): Distribution of used pronouns 
+                - word_count (int): Total words in analyzed text.
+                - sentence_count (int): Total sentences in analyzed text.
+        """
         if ignored_texts is None: ignored_texts = []
 
         text = text.strip()
@@ -61,6 +84,12 @@ class BiasDetector:
                     stereotype_result['position']['start'] += start_index
                     stereotype_result['position']['end'] += start_index                    
                     biases.append(stereotype_result)
+                    
+                    """ 
+                    Tracking sentence level flags to stop word-level flags from operating on them.
+                    Prevents double highlighting issues. 
+                    """
+
                     blocked_ranges.append((start_index, sent_end))                    
                     current_pos = sent_end
                     continue 
@@ -133,6 +162,22 @@ class BiasDetector:
         }
     
     def _calculate_overall_score(self, biases: List[Dict], word_count: int) -> int:
+        """
+        Calculates a length-normalized inclusivity score using exponential-decay functions.
+
+        Applies pre-defined severity weights and normalizes the total penalty against the word count.
+        Exponential Decay guarantees the score never drops below zero.
+
+        Args:
+            biases (List[Dict]): A list of detected bias dictionaries, each containing 'type' and 'confidence'
+            keys.
+
+            word_count (int): Total number of words in the analyzed text.
+        
+        Returns:
+            int: Final inclusivity score, boynded between 0 and 100.
+        """
+
         weights = {
             'stereotype': 15.0,
             'pronoun': 5.0,
@@ -150,9 +195,10 @@ class BiasDetector:
 
             total_penalty += weight*confidence
         
+        # Having a baseline of 30 words prevents score explosions for small inputs
         effective_length = max(word_count, 30)
         penalty_density = (total_penalty/effective_length)*100
         k_factor = 0.025
         final_score = 100.0 * math.exp(-k_factor*penalty_density)
 
-        return int(max(0, min(100, final_score)))
+        return int(final_score)

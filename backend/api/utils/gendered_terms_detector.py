@@ -6,6 +6,13 @@ import uuid
 warnings.filterwarnings("ignore")
 
 class GenderedTermsDetector:
+    """
+        Detects exclusionary gendered terms using a context-aware hybrid pipeline.
+
+        The class makes use of the following:
+            - spacy: Grammatical parsing
+            - deberta-v3 NLI: Dynamically tests hypotheses to differentiate between normal and exclusionary uses.
+    """
     def __init__(self):
         self.nli_model = CrossEncoder('cross-encoder/nli-deberta-v3-base')
         
@@ -16,8 +23,10 @@ class GenderedTermsDetector:
             download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")
 
+        # Fast pass: Determiners guarantee a specific individual rather than a generic entity
         self.safe_dets = {'the', 'this', 'that', 'these', 'those', 'my', 'our', 'your', 'his', 'her', 'its', 'their'}
         
+        # The hardcoded dictionary for optimization.
         self.term_map = {
             "anchorman": "anchor",
             "businessman": "business executive",
@@ -171,7 +180,13 @@ class GenderedTermsDetector:
             "villainess": "villain",
         }
 
-    def checks_out_as_specific(self, sentence, term_token):
+    def is_specific(self, sentence, term_token):
+        """
+        Uses deberta-v3 to determine if a term refers to a specific individual
+
+        Constructs a hypothesis and asks the model if the sentence entails the hypothesis.
+        If entailed, the sentence describes a real person.
+        """
         term = term_token.text
         is_plural = term_token.tag_ == 'NNS'
         
@@ -190,6 +205,10 @@ class GenderedTermsDetector:
         return (entailment > neutral) and (entailment > contradiction)
 
     def analyze(self, text):
+        """
+        Scans text for exclusionary terminology and applies NLI filter to
+        edge out false positives.
+        """
         biases = []
         doc = self.nlp(text)
         
@@ -205,7 +224,7 @@ class GenderedTermsDetector:
                     if any(d in self.safe_dets for d in dets):
                         continue 
                     
-                    if not self.checks_out_as_specific(sent_text, token):
+                    if not self.is_specific(sent_text, token):
                         replacement_word = str(self.term_map[root])
                         biases.append({
                             "id": str(uuid.uuid4()),
